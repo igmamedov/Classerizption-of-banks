@@ -1,7 +1,7 @@
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-
+import json
 import selenium
 
 import time 
@@ -30,3 +30,31 @@ def get_link(year='2023', product='all'):
                 'solve_share': bank_info[5].text,
             })
     return pd.DataFrame(link_df)
+
+def parse_recall_banki(link_data, n_pages=3):    
+    bank_recall_data = pd.DataFrame({'bank':[], 'author':[], 'datePublished':[], 'description':[], 'name':[], 'rating':[]})
+    for i in tqdm(range(2)):#range(len(link_data)):
+
+        bank_name = link_data.loc[i,:]['name']
+        bank_link = link_data.loc[i,:]['href']
+
+        bank_info = pd.DataFrame({'bank':[], 'author':[], 'datePublished':[], 'description':[], 'name':[], 'rating':[]})
+        for page in range(n_pages):
+            time.sleep(3)
+            try:
+                link = f'{bank_link}?page={page+1}&is_countable=on'
+                response = requests.get(link, headers={'User-Agent': UserAgent().chrome})
+                html = response.content
+                soup = BeautifulSoup(html, 'html.parser')
+                row_json = soup.find('script', {'type':'application/ld+json'})
+                string = row_json.string.replace('\r','').replace('\t','').replace('\n','').replace('@','').strip()
+                info = json.loads(string)
+                data = pd.DataFrame(info['review'])
+                data['rating'] = data['reviewRating'].apply(lambda x: x['ratingValue'])
+                data = data.drop(columns=['reviewRating', 'type'], axis=1)
+                data.loc[:,'bank'] = bank_name
+                bank_info = pd.concat([bank_info, data], ignore_index=True)
+            except:
+                continue
+        bank_recall_data = pd.concat([bank_info, bank_recall_data], ignore_index=True)
+    return bank_recall_data
