@@ -28,7 +28,7 @@ def authorization(personal_login, personal_password):
     print('Авторизация успешна!')
     return driver
 
-def parse_page(driver, bank, start_period='2020-11-06', end_period='2023-11-06', page=1):
+def parse_page(driver, bank, start_period='2020-11-06', end_period='2023-11-06', page=10):
 
     page_link_data = pd.DataFrame({'bank':[], 'href':[]})
 
@@ -44,33 +44,39 @@ def parse_page(driver, bank, start_period='2020-11-06', end_period='2023-11-06',
             page_link_data.loc[len(page_link_data.index)] = [bank, full_link]
         except:
             continue
+    page_link_data = page_link_data.dropna()
+    page_link_data.to_excel('commersant_links.xlsx')
     return page_link_data
 
 def news_parser(personal_login, personal_password, banks, n_pages, start, end, auth_type='hand'):
-    if auth_type == 'auto':
-        diver = authorization(personal_login, personal_password)
-    else:
-        driver = webdriver.Chrome()
-        time.sleep(60)
-        link_data = pd.DataFrame({'bank':[], 'href':[]})
-        for bank in banks:
-            print(f'Ищу статьи для: {bank} ({banks.index(bank) + 1} из {len(banks)})')
-            for page in tqdm(range(n_pages)):
-                page_links = parse_page(driver, bank, start_period=start, end_period=end, page=page+1)
-                link_data = pd.concat([link_data, page_links], ignore_index=True)
-                time.sleep(2)
+    try:
+        link_data = pd.read_excel('commersant_links.xlsx', index=False)
+    except:
+        if auth_type == 'auto':
+            diver = authorization(personal_login, personal_password)
+        else:
+            driver = webdriver.Chrome()
+            time.sleep(60)
+            link_data = pd.DataFrame({'bank':[], 'href':[]})
+            for bank in banks:
+                print(f'Ищу статьи для: {bank} ({banks.index(bank) + 1} из {len(banks)})')
+                for page in range(n_pages):
+                    page_links = parse_page(driver, bank, start_period=start, end_period=end, page=page+1)
+                    link_data = pd.concat([link_data, page_links], ignore_index=True)
+                    #time.sleep(2)
 
-    for i in tqdm(range(len(link_data)), desc='Обработка ссылок'):
-        url = link_data.loc[i, 'href']
-        driver.get(url)
+        for i in tqdm(range(len(link_data)), desc='Обработка ссылок'):
+            url = link_data.loc[i, 'href']
+            driver.get(url)
+            try:
+                new_soup = BeautifulSoup(driver.page_source, 'html.parser')
 
-        new_soup = BeautifulSoup(driver.page_source, 'html.parser')
+                paper_text_block = new_soup.find('div', {'class':'article_text_wrapper js-search-mark'})
+                link_data.loc[i, 'paper_text'] = str(' '.join([x.text for x in paper_text_block.find_all('p', {'class':'doc__text'})]))
 
-        paper_text_block = new_soup.find('div', {'class':'article_text_wrapper js-search-mark'})
-        link_data.loc[i, 'paper_text'] = str(' '.join([x.text for x in paper_text_block.find_all('p', {'class':'doc__text'})]))
-
-        link_data.loc[i, 'title']  = str(new_soup.find('h1', {'class':'doc_header__name js-search-mark'}).text)
-        link_data.loc[i, 'suptitle'] = str(new_soup.find('h2', {'class':'doc_header__subheader'}).text)
-        link_data.loc[i, 'datetime']  = str(new_soup.find('time', {'class':'doc_header__publish_time'}).text)
-
+                link_data.loc[i, 'title']  = str(new_soup.find('h1', {'class':'doc_header__name js-search-mark'}).text)
+                link_data.loc[i, 'suptitle'] = str(new_soup.find('h2', {'class':'doc_header__subheader'}).text)
+                link_data.loc[i, 'datetime']  = str(new_soup.find('time', {'class':'doc_header__publish_time'}).text)
+            except:
+                continue
     return link_data
