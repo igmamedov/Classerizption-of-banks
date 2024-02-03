@@ -11,14 +11,14 @@ from fake_useragent import UserAgent
 
 def get_link(year='2023', product='all'):
     link_df = []
-    for page in range(5):
+    for page in tqdm(range(5)):
         time.sleep(3)
         link = f'https://www.banki.ru/services/responses/?page={page+1}&product={product}&date={year}'
         response = requests.get(link, headers={'User-Agent': UserAgent().chrome})
         html = response.content
         soup = BeautifulSoup(html, 'html.parser')
         page_links = soup.find_all('tr', {'id':True})
-        for link in tqdm(page_links):
+        for link in page_links:
             bank_info = link.find_all('td')
             link_df.append({
                 'position': bank_info[0].text,
@@ -31,16 +31,17 @@ def get_link(year='2023', product='all'):
             })
     return pd.DataFrame(link_df)
 
-def parse_recall_banki(link_data, n_pages=3):    
+def parse_recall_banki(link_data):    
     bank_recall_data = pd.DataFrame({'bank':[], 'author':[], 'datePublished':[], 'description':[], 'name':[], 'rating':[]})
-    for i in tqdm(range(2)):#range(len(link_data)):
+    for i in tqdm(range(len(link_data))):
 
         bank_name = link_data.loc[i,:]['name']
         bank_link = link_data.loc[i,:]['href']
+        n_pages = link_data.loc[i,:]['pages']
 
         bank_info = pd.DataFrame({'bank':[], 'author':[], 'datePublished':[], 'description':[], 'name':[], 'rating':[]})
         for page in range(n_pages):
-            time.sleep(3)
+            time.sleep(1)
             try:
                 link = f'{bank_link}?page={page+1}&is_countable=on'
                 response = requests.get(link, headers={'User-Agent': UserAgent().chrome})
@@ -56,5 +57,6 @@ def parse_recall_banki(link_data, n_pages=3):
                 bank_info = pd.concat([bank_info, data], ignore_index=True)
             except:
                 continue
+        bank_info.to_excel(f'{bank_name}_comments.xlsx')
         bank_recall_data = pd.concat([bank_info, bank_recall_data], ignore_index=True)
     return bank_recall_data
