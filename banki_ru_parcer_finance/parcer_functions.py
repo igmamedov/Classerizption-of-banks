@@ -1,219 +1,219 @@
-import requests  
-from bs4 import BeautifulSoup
 import pandas as pd
-import time
 import numpy as np
-from tqdm.notebook import tqdm
+import re 
+
+import requests
+from bs4 import BeautifulSoup
+
+import time
+
 import warnings
 warnings.filterwarnings('ignore')
 
-#загружаем данные по всем показателям и по всем годам но только для показателей в тыс. руб, не для % показателей
-def data_loader_tys(years_list, dates2, dates1, property_ids):  
-    '''                                                             
-    years_list = ['2015']
-    dates2 = ['01','03','05','07','09','11']
-    dates1 = ['02','04','06','08','10','12']
-    property_ids = ['110', '30']
+
+class Download_bank_ids():
+    """
+    Скачиваем таблицу формата | bank_name | bank_id |
+    """
+    def __init__(self):
+        self.total_table = None
+        
+    def page_getter(self):
+        for p in range(8):
+            page = p + 1
+            url = f'https://www.banki.ru/banks/ratings/?source=submenu_banksratings&PAGEN_1={page}'
+            response = requests.get(url)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            yield soup
+
+    def table_creator_page(self, soup) -> pd.DataFrame:
+        bank_id_table = pd.DataFrame(columns = ['bank_name', 'id'])
+        names_and_ids = soup.find_all('a', {'class': 'widget__link'})
+        for row, i in enumerate(names_and_ids):
+            bank_id = i.get('href')
+            pattern = re.compile(r'\d{1,}')
+            match = re.findall(pattern, bank_id)
+            bank_id_table.loc[row] = [i.text, match[0]]
+        return bank_id_table
+
+    def total_banks_ids_dict_creator(self) -> pd.DataFrame:
+        self.total_table = pd.DataFrame(columns = ['bank_name', 'id'])
+        for soup in self.page_getter():
+            time.sleep(1.5)
+            page_bank_id_table = self.table_creator_page(soup)
+            self.total_table = pd.concat([self.total_table, page_bank_id_table])
+            print('page_dowloaded')
+        return self.total_table  
+
+
+class Download_bank_pages():
     '''
-    final_table = pd.DataFrame(columns = ['Название банка']) #показательи за год мерджим с исходной табличкой
-    final_table['Название банка'] = ['Сбербанк', 'ВТБ', 'Газпромбанк']
-    list_for_years = [] #пока будем скачивать все только для одного года
-    for year in tqdm(years_list): #для года (сколько лет, такой и счетчик)
+    Выбираем нужный год \n
+    Загружаем таблицу с id банков \n
+    no_fl_assets - проблемные банки после первого прохода с параметром по умолчанию
+    '''
+    def __init__(self, year, bank_ids_table, no_fl_assets = False):
+        self.year = year
+        self.bank_ids_table = bank_ids_table
+        self.final_df = pd.DataFrame()
+        self.no_fl_assets = no_fl_assets
+        self.problem_banks = []
+
+    def bank_page_url_generator(self):
+        for _ , row in self.bank_ids_table.iterrows():
+            row_id = row['id']
+            bank_name = row['bank_name']
+            url = f'https://www.banki.ru/banks/ratings/?BANK_ID={row_id}&IS_SHOW_GROUP=0&IS_SHOW_LIABILITIES=0&date1={self.year}-12-01&date2={self.year}-01-01'
+            yield bank_name, url
+
+    def extract_bank_table_from_url(self, bank_name, url):    #показатели на конец года
+        response = requests.get(url)
+        time.sleep(2)
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        #таблица 1
+        table1 = soup.find_all('table', {'class' : 'standard-table'})[0]   #ключевые показатели
+        df = pd.read_html(str(table1))[0]
+        df = df.set_axis(['место_по_России', 'место_в_регионе','Показатель', 'дек_тыс_руб', 'янв_тыс_руб', 'изм', 'процент'], axis=1)
+        df = df[['Показатель', 'дек_тыс_руб']]
+        df['дек_тыс_руб'] = df['дек_тыс_руб'].apply(lambda x: x.replace(' ', '')).astype(float)
+        df = df.pivot_table(columns = 'Показатель', values='дек_тыс_руб')
+        df_1 = df.reset_index().drop(columns='index')
+
+        if self.no_fl_assets:
+            df_1 = df_1.drop(columns = ['Активы нетто','Капитал (по форме 123)','Чистая прибыль'])
+        else:
+            df_1 = df_1.drop(columns = ['Активы нетто','Вклады физических лиц','Капитал (по форме 123)','Чистая прибыль'])
         
-        prop_table = pd.DataFrame(columns = ['Название банка']) #показательи за год мерджим
-        prop_table['Название банка'] = ['Сбербанк', 'ВТБ', 'Газпромбанк']
-        
-        dataframes_list_prop = []
-        for prop_id in property_ids: #для одного показателя внутри года
+        #таблица 2
+        table2 = soup.find_all('table', {'class' : 'standard-table'})[1] #абсолютные показатели
+        df = pd.read_html(str(table2))[0]
+        df = df.set_axis(['место_по_России', 'место_в_регионе','Показатель', 'дек_тыс_руб', 'янв_тыс_руб', 'изм', 'процент'], axis=1) 
+        df = df[['Показатель', 'дек_тыс_руб']]
+        df['дек_тыс_руб'] = df['дек_тыс_руб'].apply(lambda x: x.replace(' ', '')).astype(float)
+
+        if self.year == 2023:
+            df.iloc[15, df.columns.get_loc('Показатель')] = 'ФЛ Счета'
+        else:
+            df.iloc[6, df.columns.get_loc('Показатель')] = 'КрФЛ Сроком до 180 дней'
+            df.iloc[7, df.columns.get_loc('Показатель')] = 'КрФЛ Сроком от 181 дня до 1 года'
+            df.iloc[8, df.columns.get_loc('Показатель')] = 'КрФЛ Сроком от 1 года до 3 лет'
+            df.iloc[9, df.columns.get_loc('Показатель')] = 'КрФЛ Сроком более 3 лет'
+            df.iloc[11, df.columns.get_loc('Показатель')] = 'ФЛ Просроченная задолженность'
+
+            df.iloc[17, df.columns.get_loc('Показатель')] = 'КрЮЛ Сроком до 180 дней'
+            df.iloc[18, df.columns.get_loc('Показатель')] = 'КрЮЛ Сроком от 181 дня до 1 года'
+            df.iloc[19, df.columns.get_loc('Показатель')] = 'КрЮЛ Сроком от 1 года до 3 лет'
+            df.iloc[20, df.columns.get_loc('Показатель')] = 'КрЮЛ Сроком более 3 лет'
+            df.iloc[22, df.columns.get_loc('Показатель')] = 'ЮЛ Просроченная задолженность'
+
+            df.iloc[32, df.columns.get_loc('Показатель')] = 'ФЛ Счета'
+            df.iloc[33, df.columns.get_loc('Показатель')] = 'ФЛ Счета оборот'
+            df.iloc[34, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком до 90 дней'
+            df.iloc[35, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком до 90 дней оборот'
+            df.iloc[36, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком от 91 до 180 дней'
+            df.iloc[37, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком от 91 до 180 дней оборот'
+            df.iloc[38, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком от 181 дня до 1 года'
+            df.iloc[39, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком от 181 дня до 1 года оборот'
+            df.iloc[40, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком от 1 года до 3 лет'
+            df.iloc[41, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком от 1 года до 3 лет оборот'
+            df.iloc[42, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком более 3 лет'
+            df.iloc[43, df.columns.get_loc('Показатель')] = 'ФЛ Счета Сроком более 3 лет оборот'
+
+            df.iloc[46, df.columns.get_loc('Показатель')] = 'ЮЛ Счета'
+            df.iloc[47, df.columns.get_loc('Показатель')] = 'ЮЛ Счета оборот'
+            df.iloc[48, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком до 90 дней'
+            df.iloc[49, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком до 90 дней оборот'
+            df.iloc[50, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком от 91 до 180 дней'
+            df.iloc[51, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком от 91 до 180 дней оборот'
+            df.iloc[52, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком от 181 дня до 1 года'
+            df.iloc[53, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком от 181 дня до 1 года оборот'
+            df.iloc[54, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком от 1 года до 3 лет'
+            df.iloc[55, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком от 1 года до 3 лет оборот'
+            df.iloc[56, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком более 3 лет'
+            df.iloc[57, df.columns.get_loc('Показатель')] = 'ЮЛ Счета Сроком более 3 лет оборот'
+
+        df = df.pivot_table(columns = 'Показатель', values='дек_тыс_руб')
+        df_2 = df.reset_index().drop(columns='index')
+
+        #таблица 3
+        table3 = soup.find_all('table', {'class' : 'standard-table'})[2]    #относительные показатели
+        df = pd.read_html(str(table3))[0]
+        df = df.set_axis(['место_по_России', 'место_в_регионе','Показатель', 'дек_процент', 'янв_процент', 'изм', 'процент'], axis=1) 
+        df = df[['Показатель', 'дек_процент']]
+
+        if self.year == 2019:
+            df = df.drop(index=6)
             
+        df['дек_процент'] = df['дек_процент'].astype(float) / 100
+        df = df.pivot_table(columns = 'Показатель', values='дек_процент')
+        df_3 = df.reset_index().drop(columns='index')
 
-            dataframes_list = [] #собираем таблицу по одному показателю за год сюда
-            for d2, d1 in zip(dates2, dates1): #перебираем даты
-                data2 = f"{year}-{d2}-01"
-                data1 = f"{year}-{d1}-01"
+        merged_row = pd.concat([df_1, df_2, df_3], axis = 1)
+        merged_row['bank_name'] = bank_name
 
-                url = f'https://www.banki.ru/banks/ratings/export.php?SEARCH_NAME=&SEARCH_REGN=&search[type]=name&sort_param=rating&sort_order=ASC&PROPERTY_ID={prop_id}&REGION_ID=0&date1={data1}&date2={data2}&IS_SHOW_GROUP=0&IS_SHOW_LIABILITIES=0' 
-                #выгружаем инфу из url
-                response = requests.get(url)
-
-                x = BeautifulSoup(response.content, 'html.parser')
-                bald_text = x.text
-                raw_text = bald_text.split('\r\n')
-
-                pokazatel_raw = raw_text[1]
-                _, pokazatel = pokazatel_raw.split(': ') #какой показатель парсим например: Активы нетто 
-                pokazatel = pokazatel.replace(' ', '_')
-
-                header_columns = raw_text[3].split(';') #название колонок датасета
-                df = pd.DataFrame(columns=header_columns) #
-                df_rows = raw_text[4:-1]    #контент датасета
-
-                loc_num = 0
-                for i in df_rows:
-                    lst_i = i.split(';')
-                    df.loc[loc_num] = lst_i
-                    loc_num +=1  #index
-
-                # преобразования таблицы
-                df = df[df.columns[[2, 5, 6]]] #оставляем только название банка и значение показателя на дату2 и дату1
-                df_i = df.to_dict('records')
-
-                dataframes_list.append(df_i)
-
-                time.sleep(np.random.randint(3, 6)) #после прохода по ссылке спим 3 сек
-
-            #цикл завершился  - собираем единую табличку за год внутри одного показателя
-            init_table = pd.DataFrame(dataframes_list[0])
-
-            for table in dataframes_list[1:]: #проходимся по всем оставшимся кроме 1 таблички, тк к ней будем все клеить
-                table_i = pd.DataFrame(table)
-                init_table = init_table.merge(table_i, how = 'outer', on = 'Название банка')
-
-            #обрабатываем таблицу
-            init_table.columns = init_table.columns.str.replace(', ', '_')
-            init_table.columns = init_table.columns.str.replace(', ', '_')
-            init_table.columns = init_table.columns.str.replace('_тыс. рублей', '')
-
-            init_table = init_table.fillna(-1)
-            init_table[init_table.columns[1:]] = init_table[init_table.columns[1:]].applymap(
-                        lambda x: str(x).replace(",00", '')) #убираем ,00
+        return merged_row
     
-            init_table['pokazatel'] = pokazatel
-            pok = '_' + init_table['pokazatel'].loc[0]
-            
-            total_pokazatel_table = init_table
-            
-            total_pokazatel_table = total_pokazatel_table.rename(columns = {total_pokazatel_table.columns[1] : total_pokazatel_table.columns[1] + pok,
-                                    total_pokazatel_table.columns[2] : total_pokazatel_table.columns[2] + pok,
-                                    total_pokazatel_table.columns[3] : total_pokazatel_table.columns[3] + pok,
-                                    total_pokazatel_table.columns[4] : total_pokazatel_table.columns[4] + pok,
-                                    total_pokazatel_table.columns[5] : total_pokazatel_table.columns[5] + pok,
-                                    total_pokazatel_table.columns[6] : total_pokazatel_table.columns[6] + pok,
-                                    total_pokazatel_table.columns[7] : total_pokazatel_table.columns[7] + pok,
-                                    total_pokazatel_table.columns[8] : total_pokazatel_table.columns[8] + pok,
-                                    total_pokazatel_table.columns[9] : total_pokazatel_table.columns[9] + pok,
-                                    total_pokazatel_table.columns[10] : total_pokazatel_table.columns[10] + pok,
-                                    total_pokazatel_table.columns[11] : total_pokazatel_table.columns[11] + pok,
-                                    total_pokazatel_table.columns[12] : total_pokazatel_table.columns[12] + pok})
-            total_pokazatel_table = total_pokazatel_table.drop(columns = 'pokazatel') 
-            #получили таблицу по показателю за год
-            
-            dataframes_list_prop.append(total_pokazatel_table) #добавляем ко всем показателям за год
-        
-        #находимся под циклом для года (написать цикл, который мерджит все элементы в dataframes_list_prop)
-        for table in dataframes_list_prop:
-            prop_table = prop_table.merge(table, how = 'outer', on = 'Название банка') #получаем таличку по всем показателям за конкретный год
-
-        list_for_years.append(prop_table) #добавляем табличку по всем показателям за конкретный год в таблицу годов
-
-    #выходим из цикла года и мерджим все что внутри list_for_years
-    for table in list_for_years:
-        final_table = final_table.merge(table, how = 'outer', on = 'Название банка')
-
-    return  final_table # таблица по всем годам и всем параметрам
-
-
-
-def data_loader_percentages(years_list, dates2, dates1, property_ids):
-
-    # total_pokazatel_table = pd.DataFrame(columns = ['Название банка'])
-    # total_pokazatel_table['Название банка'] = ['Сбербанк', 'ВТБ', 'Газпромбанк']
+    def parce_year_table(self) -> pd.DataFrame:
+        cnt = 1
+        for bank_name, url in self.bank_page_url_generator():
+            try:
+                row = self.extract_bank_table_from_url(bank_name, url)
+                self.final_df = pd.concat([self.final_df, row])   #собираем итоговую табличку по строкам
+                print('bank row downloaded', cnt)
+                cnt += 1
+            except:
+                print(bank_name, url)
+                self.problem_banks.append(bank_name)
+                continue
     
-    final_table = pd.DataFrame(columns = ['Название банка']) #показательи за год мерджим с исходной табличкой
-    final_table['Название банка'] = ['Сбербанк', 'ВТБ', 'Газпромбанк']
-    list_for_years = [] #пока будем скачивать все только для одного года
+    @staticmethod
+    def prettify_final_df(df):
+        df.columns.name = 0
+        df = df.reset_index().drop(columns = 'index')
 
-    for year in tqdm(years_list): #для года
-        
-        prop_table = pd.DataFrame(columns = ['Название банка']) #показательи за год мерджим
-        prop_table['Название банка'] = ['Сбербанк', 'ВТБ', 'Газпромбанк']
-        
-        dataframes_list_prop = []
-        for prop_id in property_ids: #для одного показателя внутри года
-            
-
-            dataframes_list = [] #собираем таблицы по одному показателю за год сюда
-            for d2, d1 in zip(dates2, dates1): #перебираем даты
-                data2 = f"{year}-{d2}-01"
-                data1 = f"{year}-{d1}-01"
-
-                url = f'https://www.banki.ru/banks/ratings/export.php?SEARCH_NAME=&SEARCH_REGN=&search[type]=name&sort_param=rating&sort_order=ASC&PROPERTY_ID={prop_id}&REGION_ID=0&date1={data1}&date2={data2}&IS_SHOW_GROUP=0&IS_SHOW_LIABILITIES=0' 
-                #выгружаем инфу из url
-                response = requests.get(url)
-
-                x = BeautifulSoup(response.content, 'html.parser')
-                bald_text = x.text
-                raw_text = bald_text.split('\r\n')
-
-                pokazatel_raw = raw_text[1]
-                _, pokazatel = pokazatel_raw.split(': ') #какой показатель парсим например: Активы нетто 
-                pokazatel = pokazatel.replace(' ', '_')
-
-                header_columns = raw_text[3].split(';') #название колонок датасета
-                df = pd.DataFrame(columns=header_columns) #
-                df_rows = raw_text[4:-1]    #контент датасета
-
-                loc_num = 0
-                for i in df_rows:
-                    lst_i = i.split(';')[:-1]
-                    df.loc[loc_num] = lst_i
-                    loc_num +=1  #index
-
-                # преобразования таблицы
-                df = df[df.columns[[2, 5, 6]]] #оставляем только название банка и значение показателя на дату2 и дату1
-                df_i = df.to_dict('records')
-
-                dataframes_list.append(df_i)
-
-                time.sleep(np.random.randint(3, 6)) #после прохода по ссылке спим 3 сек
-
-            #цикл завершился  - собираем единую табличку за год внутри одного показателя
-            init_table = pd.DataFrame(dataframes_list[0])
-
-            for table in dataframes_list[1:]: #проходимся по всем оставшимся кроме 1 таблички, тк к ней будем все клеить
-                table_i = pd.DataFrame(table)
-                init_table = init_table.merge(table_i, how = 'outer', on = 'Название банка')
-
-            #     #обрабатываем таблицу
-            init_table.columns = init_table.columns.str.replace(', %', '')
-            init_table.columns = init_table.columns.str.replace(', ', '_')
-
-            init_table = init_table.fillna(-1)
-            init_table[init_table.columns[1:]] = init_table[init_table.columns[1:]].applymap(
-                        lambda x: str(x).replace(",00", '')) #убираем ,00
-    
-            init_table['pokazatel'] = pokazatel
-            pok = '_' + init_table['pokazatel'].loc[0]
-            
-            total_pokazatel_table = init_table
-
-            total_pokazatel_table = total_pokazatel_table.rename(columns = {total_pokazatel_table.columns[1] : total_pokazatel_table.columns[1] + pok,
-                                    total_pokazatel_table.columns[2] : total_pokazatel_table.columns[2] + pok,
-                                    total_pokazatel_table.columns[3] : total_pokazatel_table.columns[3] + pok,
-                                    total_pokazatel_table.columns[4] : total_pokazatel_table.columns[4] + pok,
-                                    total_pokazatel_table.columns[5] : total_pokazatel_table.columns[5] + pok,
-                                    total_pokazatel_table.columns[6] : total_pokazatel_table.columns[6] + pok,
-                                    total_pokazatel_table.columns[7] : total_pokazatel_table.columns[7] + pok,
-                                    total_pokazatel_table.columns[8] : total_pokazatel_table.columns[8] + pok,
-                                    total_pokazatel_table.columns[9] : total_pokazatel_table.columns[9] + pok,
-                                    total_pokazatel_table.columns[10] : total_pokazatel_table.columns[10] + pok,
-                                    total_pokazatel_table.columns[11] : total_pokazatel_table.columns[11] + pok,
-                                    total_pokazatel_table.columns[12] : total_pokazatel_table.columns[12] + pok})
-            total_pokazatel_table = total_pokazatel_table.drop(columns = 'pokazatel') 
-            
-
-            #получили таблицу по показателю за год
-            
-            dataframes_list_prop.append(total_pokazatel_table) #добавляем ко всем показателям за год
-        
-        #находимся под циклом для года (написать цикл, который мерджит все элементы в dataframes_list_prop)
-        for table in dataframes_list_prop:
-            prop_table = prop_table.merge(table, how = 'outer', on = 'Название банка') #получаем таличку по всем показателям за конкретный год
-
-        list_for_years.append(prop_table) #добавляем табличку по всем показателям за конкретный год в таблицу годов
-
-    #выходим из цикла года и мерджим все что внутри list_for_years
-    for table in list_for_years:
-        final_table = final_table.merge(table, how = 'outer', on = 'Название банка')
-
-    return final_table # таблица по всем годам и всем параметрам
+        df = df[['bank_name','Вложения в ценные бумаги', 'Кредитный портфель',
+       'Просроченная задолженность в кредитном портфеле', 'Активы нетто',
+       'Бумаги переданные в РЕПО', 'Векселя', 'Вклады физических лиц',
+       'Вклады физических лиц оборот', 'Вложения в акции',
+       'Вложения в векселя', 'Вложения в капиталы других организаций',
+       'Вложения в облигации', 'Выданные МБК', 'Выданные МБК оборот всего',
+       'Выпущенные облигации и векселя', 'Высоколиквидные активы',
+       'Денежные средства в кассе', 'Денежные средства в кассе оборот',
+       'Капитал (по форме 123)', 'КрФЛ Сроком более 3 лет',
+       'КрФЛ Сроком до 180 дней', 'КрФЛ Сроком от 1 года до 3 лет',
+       'КрФЛ Сроком от 181 дня до 1 года', 'КрЮЛ Сроком более 3 лет',
+       'КрЮЛ Сроком до 180 дней', 'КрЮЛ Сроком от 1 года до 3 лет',
+       'КрЮЛ Сроком от 181 дня до 1 года',
+       'Кредиты предприятиям и организациям', 'Кредиты физическим лицам',
+       'ЛОРО-счета', 'НОСТРО-счета', 'Облигации', 'Овердрафты',
+       'Овердрафты и прочие предоставленные средства',
+       'Основные средства и нематериальные активы', 'Привлеченные МБК',
+       'Привлеченные МБК оборот', 'Привлеченные от ЦБ РФ',
+       'Привлеченные от ЦБ РФ оборот', 'Прочие активы',
+       'Размещенные МБК в ЦБ РФ', 'Размещенные МБК в ЦБ РФ оборот',
+       'Средства предприятий и организаций',
+       'Средства предприятий и организаций оборот',
+       'ФЛ Просроченная задолженность', 'ФЛ Счета',
+       'ФЛ Счета Сроком более 3 лет', 'ФЛ Счета Сроком более 3 лет оборот',
+       'ФЛ Счета Сроком до 90 дней', 'ФЛ Счета Сроком до 90 дней оборот',
+       'ФЛ Счета Сроком от 1 года до 3 лет',
+       'ФЛ Счета Сроком от 1 года до 3 лет оборот',
+       'ФЛ Счета Сроком от 181 дня до 1 года',
+       'ФЛ Счета Сроком от 181 дня до 1 года оборот',
+       'ФЛ Счета Сроком от 91 до 180 дней',
+       'ФЛ Счета Сроком от 91 до 180 дней оборот', 'ФЛ Счета оборот',
+       'Чистая прибыль', 'ЮЛ Просроченная задолженность', 'ЮЛ Счета',
+       'ЮЛ Счета Сроком более 3 лет', 'ЮЛ Счета Сроком более 3 лет оборот',
+       'ЮЛ Счета Сроком до 90 дней', 'ЮЛ Счета Сроком до 90 дней оборот',
+       'ЮЛ Счета Сроком от 1 года до 3 лет',
+       'ЮЛ Счета Сроком от 1 года до 3 лет оборот',
+       'ЮЛ Счета Сроком от 181 дня до 1 года',
+       'ЮЛ Счета Сроком от 181 дня до 1 года оборот',
+       'ЮЛ Счета Сроком от 91 до 180 дней',
+       'ЮЛ Счета Сроком от 91 до 180 дней оборот', 'ЮЛ Счета оборот', 'Н1',
+       'Н2', 'Н3', 'Рентабельность активов-нетто', 'Рентабельность капитала',
+       'Уровень обеспечения кредитного портфеля залогом имущества',
+       'Уровень просроченной задолженности по кредитному портфелю',
+       'Уровень резервирования по кредитному портфелю']]
+        return df
