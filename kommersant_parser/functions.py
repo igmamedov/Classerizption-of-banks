@@ -46,31 +46,46 @@ def parse_page(driver, bank, start_period='2020-11-06', end_period='2023-11-06',
             continue
     return page_link_data
 
-def news_parser(personal_login, personal_password, banks, n_pages, start, end, auth_type='hand'):
+def news_parser(personal_login, personal_password, banks, n_pages, auth_type='hand', link_data=None):
     if auth_type == 'auto':
         diver = authorization(personal_login, personal_password)
     else:
         driver = webdriver.Chrome()
-        time.sleep(60)
+    time.sleep(60)
+
+    if link_data is None:
         link_data = pd.DataFrame({'bank':[], 'href':[]})
         for bank in banks:
             print(f'Ищу статьи для: {bank} ({banks.index(bank) + 1} из {len(banks)})')
-            for page in tqdm(range(n_pages)):
-                page_links = parse_page(driver, bank, start_period=start, end_period=end, page=page+1)
-                link_data = pd.concat([link_data, page_links], ignore_index=True)
-                time.sleep(2)
+            for year in [0,1,2,3]:
+                start = f'202{year}-01-01'
+                end = f'202{year}-12-01'
+                for page in tqdm(range(0, n_pages, 4)):
+                    try:
+                        page_links = parse_page(driver, bank, start_period=start, end_period=end, page=page+1)
+                        link_data = pd.concat([link_data, page_links], ignore_index=True)
+                        if len(page_links) == 0:
+                            break
+                    except:
+                        continue
+            link_data.to_excel('kommersant_links.xlsx')
 
     for i in tqdm(range(len(link_data)), desc='Обработка ссылок'):
-        url = link_data.loc[i, 'href']
-        driver.get(url)
+        try:
+            url = link_data.loc[i, 'href']
+            driver.get(url)
 
-        new_soup = BeautifulSoup(driver.page_source, 'html.parser')
+            new_soup = BeautifulSoup(driver.page_source, 'html.parser')
 
-        paper_text_block = new_soup.find('div', {'class':'article_text_wrapper js-search-mark'})
-        link_data.loc[i, 'paper_text'] = str(' '.join([x.text for x in paper_text_block.find_all('p', {'class':'doc__text'})]))
+            paper_text_block = new_soup.find('div', {'class':'article_text_wrapper js-search-mark'})
+            link_data.loc[i, 'paper_text'] = str(' '.join([x.text for x in paper_text_block.find_all('p', {'class':'doc__text'})]))
+            link_data.loc[i, 'title']  = str(new_soup.find('h1', {'class':'doc_header__name js-search-mark'}).text)
+            link_data.loc[i, 'suptitle'] = str(new_soup.find('h2', {'class':'doc_header__subheader'}).text)
+            link_data.loc[i, 'datetime']  = str(new_soup.find('time', {'class':'doc_header__publish_time'}).text)
+        except:
+            continue
+        if i % 100 == 0:
+            link_data.to_excel('kommersant_papers.xlsx')
 
-        link_data.loc[i, 'title']  = str(new_soup.find('h1', {'class':'doc_header__name js-search-mark'}).text)
-        link_data.loc[i, 'suptitle'] = str(new_soup.find('h2', {'class':'doc_header__subheader'}).text)
-        link_data.loc[i, 'datetime']  = str(new_soup.find('time', {'class':'doc_header__publish_time'}).text)
 
     return link_data
