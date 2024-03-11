@@ -4,8 +4,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.express as px
-
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.impute import KNNImputer
 from sklearn.cluster import KMeans, DBSCAN, SpectralClustering
 from sklearn.decomposition import PCA
@@ -240,6 +239,12 @@ def preprocess_data_2019_2021(dataframe, df_stdev_roas, year) -> pd.DataFrame:
     for col in X.columns:
         X.loc[X[col] == np.inf, col] = np.nan
 
+    scaler = MinMaxScaler()
+    zscore_scaled = scaler.fit_transform(X[['Z-score']])
+    npl_scaled = scaler.fit_transform(X[['NPL Ratio']])
+    X['Z-score'] = zscore_scaled
+    X['NPL Ratio'] = npl_scaled
+
     return X
 
 def preprocess_data2023(dataframe, df_stdev_roas):
@@ -304,6 +309,12 @@ def preprocess_data2023(dataframe, df_stdev_roas):
     
     for col in X.columns:
         X.loc[X[col] == np.inf, col] = np.nan
+
+    scaler = MinMaxScaler()
+    zscore_scaled = scaler.fit_transform(X[['Z-score']])
+    npl_scaled = scaler.fit_transform(X[['NPL Ratio']])
+    X['Z-score'] = zscore_scaled
+    X['NPL Ratio'] = npl_scaled
         
     return X
 
@@ -396,3 +407,41 @@ def knn_nan_inputer(dataframe):
     df_transformed = imputer.fit_transform(dataframe)
     return df_transformed
                 
+
+
+def visuals_boxplot(dataframe, year = None):
+    plt.figure(figsize=(24,28))
+    for i in range(0, dataframe.shape[1]):
+        plt.subplot(10,4,i+1)
+        sns.boxplot(x=dataframe[dataframe.columns[i]], palette='viridis')
+        plt.title(dataframe.columns[i], fontsize=20)
+        plt.xlabel(' ')
+        plt.tight_layout()
+        plt.suptitle(f'Year: {year}', fontsize=30)
+        plt.subplots_adjust(top=0.88)
+
+def visuals_kdeplot(dataframe, hue = False, hue_col = None, year = None):
+    plt.figure(figsize=(24,28))
+    for i in range(0, dataframe.shape[1]):
+        plt.subplot(10,4,i+1)
+        if hue == True:
+            sns.kdeplot(x=dataframe[dataframe.columns[i]], palette='viridis', shade=True, hue = dataframe[hue_col])
+        else:
+            sns.kdeplot(x=dataframe[dataframe.columns[i]], palette='viridis', shade=True)
+        plt.title(dataframe.columns[i], fontsize=20)
+        plt.xlabel(' ')
+        plt.tight_layout()
+        plt.suptitle(f'Year: {year}', fontsize=30)
+        plt.subplots_adjust(top=0.88)
+
+
+def visuals_violinplot(dataframe, year = None):
+    plt.figure(figsize=(24,28))
+    for i in range(0, dataframe.shape[1]):
+        plt.subplot(10,4,i+1)
+        sns.violinplot(x=dataframe[dataframe.columns[i]], palette='viridis', shade=True)
+        plt.title(dataframe.columns[i], fontsize=20)
+        plt.xlabel(' ')
+        plt.tight_layout()
+        plt.suptitle(f'Year: {year}', fontsize=30)
+        plt.subplots_adjust(top=0.88)
