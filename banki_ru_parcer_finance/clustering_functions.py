@@ -18,7 +18,7 @@ class K_means_cluster:
     '''
     K-means кластеризация с разными параметрами: \n
     - `features_table` - данные
-    - `num_clusters` - кол-во кластеров
+    - `num_clusters` - кол-во кластеров список (перебирает все варианты из списка)
     - `bank_name_column` - названия банков для года
     - `scaling` - StandardScaler для фичей
     - `pca_or_tsne` - 'pca', 'tsne' для визуализации
@@ -26,8 +26,14 @@ class K_means_cluster:
     - `perplexity` - для t-SNE
     '''
 
-    def __init__(self, features_table, num_clusters: list, bank_name_column, scaling = False, 
-                 pca_or_tsne = 'pca', clustering_before_dimreduce = True, perplexity = 10):
+    def __init__(self, features_table, 
+                 num_clusters: list, 
+                 bank_name_column, 
+                 scaling = False, 
+                 pca_or_tsne = 'pca', 
+                 clustering_before_dimreduce = True, 
+                 perplexity = 10):
+        
         self.features_table = features_table
         self.num_clusters = num_clusters
         self.bank_name_column = bank_name_column
@@ -41,14 +47,13 @@ class K_means_cluster:
         df_st = self.features_table[self.features_table.columns]
 
         #fillna with KNN
-        imputer = KNNImputer(n_neighbors=2, missing_values = np.nan, weights = 'distance')
+        imputer = KNNImputer(n_neighbors=3, missing_values = np.nan, weights = 'distance')
         self.features_table = imputer.fit_transform(self.features_table)
 
         if self.scaling:
             scaler = StandardScaler()
             self.features_table = scaler.fit_transform(self.features_table)
 
-        #clustering before dimensional reduce
         for n in self.num_clusters:
             
             if self.pca_or_tsne == 'pca':
@@ -56,23 +61,33 @@ class K_means_cluster:
                 components = pca.fit_transform(self.features_table)
             
             if self.pca_or_tsne == 'tsne':
-                tsne = TSNE(n_components=2, learning_rate='auto',init='pca', perplexity=self.perplexity)
+                tsne = TSNE(n_components=2, learning_rate='auto', init='pca', perplexity=self.perplexity)
                 components = tsne.fit_transform(self.features_table)
                 
-
+            # кластеризация ДО понижения размерности
             if self.clustering_before_dimreduce == True:
                 k_means = KMeans(n_clusters = n)
                 k_means = k_means.fit(self.features_table)
                 labels = k_means.predict(self.features_table)
-                silhouette_score = metrics.silhouette_score(self.features_table, labels, metric='euclidean')
+                silhouette_score = metrics.silhouette_score(self.features_table, labels)
+                ch_score = metrics.calinski_harabasz_score(self.features_table, labels)
+                db_score = metrics.davies_bouldin_score(self.features_table, labels)
+                
 
+            # понижение размерности ДО кластеризации
             if self.clustering_before_dimreduce == False:
                 k_means = KMeans(n_clusters = n)
                 k_means = k_means.fit(components)
                 labels = k_means.predict(components)
                 silhouette_score = metrics.silhouette_score(components, labels, metric='euclidean')
+                ch_score = metrics.calinski_harabasz_score(components, labels)
+                db_score = metrics.davies_bouldin_score(components, labels)
 
             print('silhouette_score:', silhouette_score)
+            print('calinski_harabasz_score:', ch_score)
+            print('davies_bouldin_score:', db_score)
+            
+            
             fig = px.scatter(components, x=0, y=1, color=labels)
             fig.update_layout(title=f'Number of clusters = {n}')
             fig.show()
@@ -87,7 +102,8 @@ class K_means_cluster:
                 bank_list = df_st[df_st['bank_name'].isin(
                     df_st[df_st['labels'] == cluster_label]['bank_name'].values)]['bank_name'].values
                 describe_df = df_st[df_st['bank_name'].isin(
-                    df_st[df_st['labels'] == cluster_label]['bank_name'].values)].describe().T[['mean', 'std','min','max', '25%', '50%', '75%']]    
+                    df_st[df_st['labels'] == cluster_label]['bank_name'].values)].describe().T[['mean', 'std',
+                                                                                                'min','max', '25%', '50%', '75%']]    
 
                 n_list.append((cluster_label,bank_list, describe_df))
         
@@ -313,14 +329,17 @@ def preprocess_data2023(dataframe, df_stdev_roas):
     scaler = MinMaxScaler()
     zscore_scaled = scaler.fit_transform(X[['Z-score']])
     npl_scaled = scaler.fit_transform(X[['NPL Ratio']])
+    ldr_scaled = scaler.fit_transform(X[['LDR']])
+    
     X['Z-score'] = zscore_scaled
     X['NPL Ratio'] = npl_scaled
+    X['LDR'] = ldr_scaled
         
     return X
 
 def labels_2021_2023(dataframe) -> pd.DataFrame:
     '''
-    Создает 3 фичи: \n
+    Создает 3 фичи:
     - Банк государственный или частный
     - Банк инострынный или отечественный
     - Банк системнозначимый или нет
@@ -433,7 +452,6 @@ def visuals_kdeplot(dataframe, hue = False, hue_col = None, year = None):
         plt.tight_layout()
         plt.suptitle(f'Year: {year}', fontsize=30)
         plt.subplots_adjust(top=0.88)
-
 
 def visuals_violinplot(dataframe, year = None):
     plt.figure(figsize=(24,28))
