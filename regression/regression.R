@@ -139,8 +139,9 @@ linear_model_0 = lm(Score ~ nps_cluster_1 + nps_cluster_2 +
                           data=data)
 summary(linear_model_0)
 summary(linear_model_0)$r.squared
-vif(linear_model_0)
 
+vif_0 = as.matrix(vif(linear_model_0))
+write.csv(vif_0, file="vif_before.csv")
 # убираем взаимозаменяемые регрессоры
 linear_model_1 = lm(Score ~ nps_cluster_1 + nps_cluster_2 +
                             porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
@@ -156,8 +157,10 @@ linear_model_1 = lm(Score ~ nps_cluster_1 + nps_cluster_2 +
 
 summary(linear_model_1)
 summary(linear_model_1)$r.squared
-vif(linear_model_1)
 
+vif_1 = as.matrix(vif(linear_model_1))
+write.csv(vif_1, file="vif_after.csv")
+write.csv(summary(linear_model_1)$coefficients, 'lm_coef.csv')
 #---------------------------------------------------
 # Часть 2. Оценивание параметров и тест Бранта
 #---------------------------------------------------
@@ -178,7 +181,7 @@ model_probit <- glm(formula = score_binary ~ nps_cluster_1 + nps_cluster_2 +
                     family = binomial(link = "probit"))             
 
 summary(model_probit) 
-
+write.csv(summary(model_probit) $coefficients, 'probit_coef.csv')
 
 # Проведем тест Бранта для проверки parallel assumption
 model_oprobit <- polr(formula = as.factor(score_labels) ~ nps_cluster_1 + nps_cluster_2 +
@@ -195,7 +198,7 @@ model_oprobit <- polr(formula = as.factor(score_labels) ~ nps_cluster_1 + nps_cl
 summary(model_oprobit) 
 brant(model_oprobit)
 
-
+write.csv(as.matrix(brant(model_oprobit)), 'brant_test.csv')
 # Применим порядковую пробит модель
 model_orprobit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
                                           porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
@@ -209,7 +212,6 @@ model_orprobit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
                           data = data)
 
 summary(model_orprobit)
-
 # Применим порядковую логит модель
 model_orlogit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
                                          porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
@@ -224,7 +226,6 @@ model_orlogit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
                           marginal = list(logistic = NULL))
 
 summary(model_orlogit)
-
 # Оценим порядклвую полупараметрическую модель
 model_orsemi = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
                                         porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
