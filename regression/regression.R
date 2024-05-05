@@ -15,26 +15,23 @@ data = read_excel("C:\\Диплом\\Classerizption-of-banks\\data4regresssion\\
 data = as.data.frame(data)
 n = nrow(data)
 
+summary(as.factor(data$nps_cluster)) 
+
 #кластеры nps
 nps_cluster_0 = rep(0, n) 
-nps_cluster_0[data$nps_cluster == 0] = 1
+nps_cluster_0[data$nps_cluster == 1] = 1
 nps_cluster_0 = matrix(nps_cluster_0, ncol = 1)
 data$nps_cluster_0 = nps_cluster_0
 
 nps_cluster_1 = rep(0, n) 
-nps_cluster_1[data$nps_cluster == 1] = 1 
+nps_cluster_1[data$nps_cluster == 2] = 1 
 nps_cluster_1 = matrix(nps_cluster_1, ncol = 1)
 data$nps_cluster_1 = nps_cluster_1
 
 nps_cluster_2 = rep(0, n) 
-nps_cluster_2[data$nps_cluster == 2] = 1 
+nps_cluster_2[data$nps_cluster == 3] = 1 
 nps_cluster_2 = matrix(nps_cluster_2, ncol = 1)
 data$nps_cluster_2 = nps_cluster_2
-
-nps_cluster_3 = rep(0, n) 
-nps_cluster_3[data$nps_cluster == 3] = 1 
-nps_cluster_3 = matrix(nps_cluster_3, ncol = 1)
-data$nps_cluster_3 = nps_cluster_3
 
 #кластеры financial
 fin_cluster_0 = rep(0, n) 
@@ -124,7 +121,7 @@ head(data, 5)
 # Проводем дополнительный анализ ViF
 
 # все регрессоры
-linear_model_0 = lm(Score ~ nps_cluster_1 + nps_cluster_2 + nps_cluster_3 +
+linear_model_0 = lm(Score ~ nps_cluster_1 + nps_cluster_2 +
                             porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
                             fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 +
                             Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + ROE +
@@ -132,9 +129,9 @@ linear_model_0 = lm(Score ~ nps_cluster_1 + nps_cluster_2 + nps_cluster_3 +
                             TotalLoans_TotalAssets + LDR + LiquidAssetsRatio + Z_score +
                             LoansLE_TotalAssets +
                             AttractedMbcs_TotalAssets + Capital_assets + gos_sobstv + foreign +
-                            system + law + stratagy + nationhood +
+                            system + law + strategy + nationhood +
                             news_cluster + A_Shares + A_Promissory_notes +
-                            A_bonds + A_capitals + A_corporate_loans + A_indovoduals_loans +
+                            A_bonds + A_capitals + A_corporate_loans + A_individuals_loans +
                             A_loro_loans + A_fixed_assets + A_Mbcs +
                             P_deposits_individuals + P_corporate_funds + P_accounts_individuals +
                             P_bonds_promissory_notes + P_capitals,
@@ -145,10 +142,10 @@ summary(linear_model_0)$r.squared
 vif(linear_model_0)
 
 # убираем взаимозаменяемые регрессоры
-linear_model_1 = lm(Score ~ nps_cluster_1 + nps_cluster_2 + nps_cluster_3 +
+linear_model_1 = lm(Score ~ nps_cluster_1 + nps_cluster_2 +
                             porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
                             fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
-                            law + nationhood + stratagy + 
+                            law + nationhood + strategy + 
                             Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
                             TotalLoans_TotalAssets + Z_score + 
                             gos_sobstv + foreign + system + A_Shares +
@@ -168,10 +165,10 @@ vif(linear_model_1)
 # Воспользуемся пробит модель, предварительно перекодировав индекс стабильности
 data$score_binary <- as.numeric(data$score_labels >= 3)
 
-model_probit <- glm(formula = score_binary ~ nps_cluster_1 + nps_cluster_2 + nps_cluster_3 +
+model_probit <- glm(formula = score_binary ~ nps_cluster_1 + nps_cluster_2 +
                                               porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
                                               fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
-                                              law + nationhood + stratagy + 
+                                              law + securities + strategy + 
                                               Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + Debt_TotalAssets + 
                                               TotalLoans_TotalAssets + Z_score + 
                                               gos_sobstv + foreign + system + A_Shares +
@@ -184,10 +181,10 @@ summary(model_probit)
 
 
 # Проведем тест Бранта для проверки parallel assumption
-model_oprobit <- polr(formula = as.factor(score_labels) ~ nps_cluster_1 + nps_cluster_2 + nps_cluster_3 +
+model_oprobit <- polr(formula = as.factor(score_labels) ~ nps_cluster_1 + nps_cluster_2 +
                                                           porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
                                                           fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
-                                                          law + nationhood + stratagy + 
+                                                          law + securities + strategy + 
                                                           Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
                                                           TotalLoans_TotalAssets + Z_score + 
                                                           gos_sobstv + foreign + system + A_Shares +
@@ -200,25 +197,24 @@ brant(model_oprobit)
 
 
 # Применим порядковую пробит модель
-model_oprobit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 + nps_cluster_3 +
-                                         porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
-                                         fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
-                                         law + nationhood + stratagy + 
-                                         Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
-                                         TotalLoans_TotalAssets + Z_score + 
-                                         gos_sobstv + foreign + system + A_Shares +
-                                         A_bonds + A_capitals + A_loro_loans + A_fixed_assets +
-                                         P_deposits_individuals + P_corporate_funds + P_capitals,
+model_orprobit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
+                                          porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
+                                          fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
+                                          law + securities + strategy + 
+                                          Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
+                                          TotalLoans_TotalAssets + Z_score + 
+                                          gos_sobstv + foreign + system + A_Shares +
+                                          A_bonds + A_capitals + A_loro_loans + A_fixed_assets +
+                                          P_deposits_individuals + P_corporate_funds + P_capitals,
                           data = data)
 
-summary(model_oprobit)
+summary(model_orprobit)
 
 # Применим порядковую логит модель
-model_oprobit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 + nps_cluster_3 +
-                                         nps_cluster_1 + nps_cluster_2 + nps_cluster_3 +
+model_orlogit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
                                          porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
                                          fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
-                                         law + nationhood + stratagy + 
+                                         law + securities + strategy + 
                                          Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
                                          TotalLoans_TotalAssets + Z_score + 
                                          gos_sobstv + foreign + system + A_Shares +
@@ -227,5 +223,47 @@ model_oprobit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 + nps_clu
                           data = data,
                           marginal = list(logistic = NULL))
 
-summary(model_oprobit)
+summary(model_orlogit)
+
+# Оценим порядклвую полупараметрическую модель
+model_orsemi = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
+                                        porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
+                                        fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
+                                        law + securities + strategy + 
+                                        Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
+                                        TotalLoans_TotalAssets + Z_score + 
+                                        gos_sobstv + foreign + system + A_Shares +
+                                        A_bonds + A_capitals + A_loro_loans + A_fixed_assets +
+                                        P_deposits_individuals + P_corporate_funds + P_capitals,
+                          data = data,
+                          marginal = list(hpa = 3))
+
+summary(model_orsemi)
+
+c(probit = AIC(model_orprobit), logit = AIC(model_orlogit), semiparametric = AIC(model_orsemi))
+c(probit = BIC(model_orprobit), logit = BIC(model_orlogit), semiparametric = BIC(model_orsemi))
+c(probit = logLik(model_orprobit), logit = logLik(model_orlogit), semiparametric = logLik(model_orsemi))
+#---------------------------------------------------
+# Часть 3. Проверка гипотез
+#---------------------------------------------------
+
+# Проверим гипотезу о том, что porfolio_cluster_1 оказывает такое же влияние на 
+# индекс стабильности как и porfolio_cluster_2
+
+fn_test = function(object)
+{
+  coef_val = coef(object, eq = 1)
+  val = coef_val["porfolio_cluster_1"] - coef_val["porfolio_cluster_2"]
+  return(val)
+}
+
+test.1 <- delta_method(model_orprobit, fn = fn_test)
+summary(test.1)
+
+test.1 <- delta_method(model_orlogit, fn = fn_test)
+summary(test.1)
+
+test.1 <- delta_method(model_orsemi, fn = fn_test)
+summary(test.1)
+
 
