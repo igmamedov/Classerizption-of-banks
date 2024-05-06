@@ -144,14 +144,14 @@ vif_0 = as.matrix(vif(linear_model_0))
 write.csv(vif_0, file="vif_before.csv")
 # убираем взаимозаменяемые регрессоры
 linear_model_1 = lm(Score ~ nps_cluster_1 + nps_cluster_2 +
-                            porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
-                            fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
-                            law + nationhood + strategy + 
-                            Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
-                            TotalLoans_TotalAssets + Z_score + 
-                            gos_sobstv + foreign + system + A_Shares +
-                            A_bonds + A_capitals + A_loro_loans + A_fixed_assets +
-                            P_deposits_individuals + P_corporate_funds + P_capitals,
+                      porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
+                      fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
+                      law + securities + strategy + 
+                      Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
+                      TotalLoans_TotalAssets + Z_score + 
+                      gos_sobstv + foreign + system + A_Shares +
+                      A_bonds + A_capitals + A_loro_loans + A_fixed_assets +
+                      P_deposits_individuals + P_corporate_funds + P_capitals,
                         
                     data=data)
 
@@ -172,7 +172,7 @@ model_probit <- glm(formula = score_binary ~ nps_cluster_1 + nps_cluster_2 +
                                               porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
                                               fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
                                               law + securities + strategy + 
-                                              Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + Debt_TotalAssets + 
+                                              Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
                                               TotalLoans_TotalAssets + Z_score + 
                                               gos_sobstv + foreign + system + A_Shares +
                                               A_bonds + A_capitals + A_loro_loans + A_fixed_assets +
@@ -226,24 +226,9 @@ model_orlogit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
                           marginal = list(logistic = NULL))
 
 summary(model_orlogit)
-# Оценим порядклвую полупараметрическую модель
-model_orsemi = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
-                                        porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
-                                        fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
-                                        law + securities + strategy + 
-                                        Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
-                                        TotalLoans_TotalAssets + Z_score + 
-                                        gos_sobstv + foreign + system + A_Shares +
-                                        A_bonds + A_capitals + A_loro_loans + A_fixed_assets +
-                                        P_deposits_individuals + P_corporate_funds + P_capitals,
-                          data = data,
-                          marginal = list(hpa = 3))
 
-summary(model_orsemi)
-
-c(probit = AIC(model_orprobit), logit = AIC(model_orlogit), semiparametric = AIC(model_orsemi))
-c(probit = BIC(model_orprobit), logit = BIC(model_orlogit), semiparametric = BIC(model_orsemi))
-c(probit = logLik(model_orprobit), logit = logLik(model_orlogit), semiparametric = logLik(model_orsemi))
+c(orprobit = AIC(model_orprobit), orlogit = AIC(model_orlogit), binprobit = AIC(model_probit), lm = AIC(linear_model_1))
+c(orprobit = BIC(model_orprobit), orlogit = BIC(model_orlogit), binprobit = BIC(model_probit), lm = BIC(linear_model_1))
 
 #---------------------------------------------------
 # Часть 3. Проверка гипотез
@@ -263,9 +248,6 @@ test.1 <- delta_method(model_orprobit, fn = fn_test)
 summary(test.1)
 
 test.1 <- delta_method(model_orlogit, fn = fn_test)
-summary(test.1)
-
-test.1 <- delta_method(model_orsemi, fn = fn_test)
 summary(test.1)
 
 #---------------------------------------------------
@@ -478,4 +460,3 @@ summary(me.sec.test.g3)
 
 me.sec.test.g4 <- delta_method(model_orlogit, fn = me.sec.fn, fn_args =list(4))
 summary(me.sec.test.g4)
-
