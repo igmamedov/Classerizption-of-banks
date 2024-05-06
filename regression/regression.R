@@ -244,6 +244,7 @@ summary(model_orsemi)
 c(probit = AIC(model_orprobit), logit = AIC(model_orlogit), semiparametric = AIC(model_orsemi))
 c(probit = BIC(model_orprobit), logit = BIC(model_orlogit), semiparametric = BIC(model_orsemi))
 c(probit = logLik(model_orprobit), logit = logLik(model_orlogit), semiparametric = logLik(model_orsemi))
+
 #---------------------------------------------------
 # Часть 3. Проверка гипотез
 #---------------------------------------------------
@@ -267,4 +268,214 @@ summary(test.1)
 test.1 <- delta_method(model_orsemi, fn = fn_test)
 summary(test.1)
 
+#---------------------------------------------------
+# Часть 4. Предельные эффекты и их значисость
+#---------------------------------------------------
+
+# Посчитаем средний предельный эффект перемнной
+# в сравнение с базовым на вероятность попасть в 
+# ту или иную группу
+
+# По критериям информативности будем использовать логит модель 
+
+# porfolio_cluster
+data.porfolio_cluster = data
+data.porfolio_cluster$porfolio_cluster_1 = 0
+data.porfolio_cluster$porfolio_cluster_2 = 0
+data.porfolio_cluster$porfolio_cluster_3 = 0
+data.porfolio_cluster$porfolio_cluster_4 = 0
+
+ame.p1_g0 <- mean(predict(model_orlogit, group = 0, type = "prob", 
+                             me = "porfolio_cluster_1", eps = c(0, 1),
+                             newdata = data.porfolio_cluster))
+
+ame.p1_g1 <- mean(predict(model_orlogit, group = 1, type = "prob", 
+                                 me = "porfolio_cluster_1", eps = c(0, 1),
+                                 newdata = data.porfolio_cluster))
+
+ame.p1_g2 <- mean(predict(model_orlogit, group = 2, type = "prob", 
+                                 me = "porfolio_cluster_1", eps = c(0, 1),
+                                 newdata = data.porfolio_cluster))
+
+ame.p1_g3 <- mean(predict(model_orlogit, group = 3, type = "prob", 
+                                 me = "porfolio_cluster_1", eps = c(0, 1),
+                                 newdata = data.porfolio_cluster))
+
+ame.p1_g4 <- mean(predict(model_orlogit, group = 4, type = "prob", 
+                                 me = "porfolio_cluster_1", eps = c(0, 1),
+                                 newdata = data.porfolio_cluster))
+
+ame.p2_g0 <- mean(predict(model_orlogit, group = 0, type = "prob", 
+                                 me = "porfolio_cluster_2", eps = c(0, 1),
+                                 newdata = data.porfolio_cluster))
+
+ame.p2_g1 <- mean(predict(model_orlogit, group = 1, type = "prob", 
+                                 me = "porfolio_cluster_2", eps = c(0, 1),
+                                 newdata = data.porfolio_cluster))
+
+ame.p2_g2 <- mean(predict(model_orlogit, group = 2, type = "prob", 
+                                 me = "porfolio_cluster_2", eps = c(0, 1),
+                                 newdata = data.porfolio_cluster))
+
+ame.p2_g3 <- mean(predict(model_orlogit, group = 3, type = "prob", 
+                                 me = "porfolio_cluster_2", eps = c(0, 1),
+                                 newdata = data.porfolio_cluster))
+
+ame.p2_g4 <- mean(predict(model_orlogit, group = 4, type = "prob", 
+                                 me = "porfolio_cluster_2", eps = c(0, 1),
+                                 newdata = data.porfolio_cluster))
+
+# fin_cluster          
+data.fin_cluster = data
+data.fin_cluster$fin_cluster_1 = 0
+data.fin_cluster$fin_cluster_2 = 0
+data.fin_cluster$fin_cluster_3 = 0
+data.fin_cluster$fin_cluster_4 = 0
+data.fin_cluster$fin_cluster_5 = 0
+
+ame.f4_g0 <- mean(predict(model_orlogit, group = 0, type = "prob", 
+                                 me = "fin_cluster_4", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+ame.f4_g1 <- mean(predict(model_orlogit, group = 1, type = "prob", 
+                                 me = "fin_cluster_4", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+ame.f4_g2 <- mean(predict(model_orlogit, group = 2, type = "prob", 
+                                 me = "fin_cluster_4", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+ame.f4_g3 <- mean(predict(model_orlogit, group = 3, type = "prob", 
+                                 me = "fin_cluster_4", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+ame.f4_g4 <- mean(predict(model_orlogit, group = 4, type = "prob", 
+                                 me = "fin_cluster_4", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+ame.f5_g0 <- mean(predict(model_orlogit, group = 0, type = "prob", 
+                                 me = "fin_cluster_5", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+ame.f5_g1 <- mean(predict(model_orlogit, group = 1, type = "prob", 
+                                 me = "fin_cluster_5", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+ame.f5_g2 <- mean(predict(model_orlogit, group = 2, type = "prob", 
+                                 me = "fin_cluster_5", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+ame.f5_g3 <- mean(predict(model_orlogit, group = 3, type = "prob", 
+                                 me = "fin_cluster_5", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+ame.f5_g4 <- mean(predict(model_orlogit, group = 4, type = "prob", 
+                                 me = "fin_cluster_5", eps = c(0, 1),
+                                 newdata = data.fin_cluster))
+
+# test me clusters
+
+me.cl.fn <- function(object, group, me)
+{
+  val <- mean(predict(object, group = group, type = "prob", 
+                      me = me, eps = c(0, 1),
+                      newdata = data.fin_cluster))
+  return(val)
+}
+
+me.cl.test.p1_g0 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(0, "porfolio_cluster_1"))
+summary(me.cl.test.p1_g0)
+
+me.cl.test.p1_g1 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(1, "porfolio_cluster_1"))
+summary(me.cl.test.p1_g1)
+
+me.cl.test.p1_g2 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(2, "porfolio_cluster_1"))
+summary(me.cl.test.p1_g2)
+
+me.cl.test.p1_g3 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(3, "porfolio_cluster_1"))
+summary(me.cl.test.p1_g3)
+
+me.cl.test.p1_g4 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(4, "porfolio_cluster_1"))
+summary(me.cl.test.p1_g4)
+
+me.cl.test.p2_g0 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(0, "porfolio_cluster_2"))
+summary(me.cl.test.p2_g0)
+
+me.cl.test.p2_g1 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(1, "porfolio_cluster_2"))
+summary(me.cl.test.p2_g1)
+
+me.cl.test.p2_g2 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(2, "porfolio_cluster_2"))
+summary(me.cl.test.p2_g2)
+
+me.cl.test.p2_g3 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(3, "porfolio_cluster_2"))
+summary(me.cl.test.p2_g3)
+
+me.cl.test.p2_g4 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(4, "porfolio_cluster_2"))
+summary(me.cl.test.p2_g4)
+
+me.cl.fn <- function(object, group, me)
+{
+  val <- mean(predict(object, group = group, type = "prob", 
+                      me = me, eps = c(0, 1),
+                      newdata = data.porfolio_cluster))
+  return(val)
+}
+
+me.cl.test.f4_g0 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(0, "fin_cluster_4"))
+summary(me.cl.test.f4_g0)
+
+me.cl.test.f4_g1 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(1, "fin_cluster_4"))
+summary(me.cl.test.f4_g1)
+
+me.cl.test.f4_g2 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(2, "fin_cluster_4"))
+summary(me.cl.test.f4_g2)
+
+me.cl.test.f4_g3 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(3, "fin_cluster_4"))
+summary(me.cl.test.f4_g3)
+
+me.cl.test.f4_g4 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(4, "fin_cluster_4"))
+summary(me.cl.test.f4_g4)
+
+me.cl.test.f5_g0 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(0, "fin_cluster_5"))
+summary(me.cl.test.f5_g0)
+
+me.cl.test.f5_g1 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(1, "fin_cluster_5"))
+summary(me.cl.test.f5_g1)
+
+me.cl.test.f5_g2 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(2, "fin_cluster_5"))
+summary(me.cl.test.f5_g2)
+
+me.cl.test.f5_g3 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(3, "fin_cluster_5"))
+summary(me.cl.test.f5_g3)
+
+me.cl.test.f5_g4 <- delta_method(model_orlogit, fn = me.cl.fn, fn_args =list(4, "fin_cluster_5"))
+summary(me.cl.test.f5_g4)
+
+# securities 
+ame.sec_g0 <- mean(predict(model_orlogit, group = 0, type = "prob", me = "securities"))
+ame.sec_g1 <- mean(predict(model_orlogit, group = 1, type = "prob", me = "securities"))
+ame.sec_g2 <- mean(predict(model_orlogit, group = 2, type = "prob", me = "securities"))
+ame.sec_g3 <- mean(predict(model_orlogit, group = 3, type = "prob", me = "securities"))
+ame.sec_g4 <- mean(predict(model_orlogit, group = 4, type = "prob", me = "securities"))
+
+me.sec.fn <- function(object, group)
+{
+  val <- mean(predict(object, group = group, type = "prob", me = 'securities'))
+  return(val)
+}
+
+me.sec.test.g0 <- delta_method(model_orlogit, fn = me.sec.fn, fn_args =list(0))
+summary(me.sec.test.g0)
+
+me.sec.test.g1 <- delta_method(model_orlogit, fn = me.sec.fn, fn_args =list(1))
+summary(me.sec.test.g1)
+
+me.sec.test.g2 <- delta_method(model_orlogit, fn = me.sec.fn, fn_args =list(2))
+summary(me.sec.test.g2)
+
+me.sec.test.g3 <- delta_method(model_orlogit, fn = me.sec.fn, fn_args =list(3))
+summary(me.sec.test.g3)
+
+me.sec.test.g4 <- delta_method(model_orlogit, fn = me.sec.fn, fn_args =list(4))
+summary(me.sec.test.g4)
 
