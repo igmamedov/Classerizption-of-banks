@@ -9,7 +9,10 @@ library("MASS")                                          # порядковый 
 library("switchSelection")                               # порядковый пробит и логит
 library ("readxl")                                       # чтение эесель файлов
 library("car")                                           # для полсчета ViF
-  
+
+library("sandwich")                                      # Для робастных ошибок
+library("lmtest") 
+
 # Подгружаем данные и приводим категориальные переменные
 data = read_excel("C:\\Диплом\\Classerizption-of-banks\\data4regresssion\\final_df.xlsx")
 data = as.data.frame(data)
@@ -161,6 +164,9 @@ summary(linear_model_1)$r.squared
 vif_1 = as.matrix(vif(linear_model_1))
 write.csv(vif_1, file="vif_after.csv")
 write.csv(summary(linear_model_1)$coefficients, 'lm_coef.csv')
+
+# прриминение робастных ошибок Уайта
+coeftest(linear_model_1, vcov. = vcovHC(linear_model_1, "HC0")) 
 #---------------------------------------------------
 # Часть 2. Оценивание параметров и тест Бранта
 #---------------------------------------------------
@@ -231,7 +237,28 @@ c(orprobit = AIC(model_orprobit), orlogit = AIC(model_orlogit), binprobit = AIC(
 c(orprobit = BIC(model_orprobit), orlogit = BIC(model_orlogit), binprobit = BIC(model_probit), lm = BIC(linear_model_1))
 
 #---------------------------------------------------
-# Часть 3. Проверка гипотез
+# Часть 3. Гетероскедастичность
+#---------------------------------------------------
+
+# От новостных признаков и кластеров
+model_hetorlogit = mvoprobit(score_labels ~ nps_cluster_1 + nps_cluster_2 +
+                                          porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
+                                          fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4 + fin_cluster_5 + 
+                                          law + securities + strategy + 
+                                          Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + 
+                                          TotalLoans_TotalAssets + Z_score + 
+                                          gos_sobstv + foreign + system + A_Shares +
+                                          A_bonds + A_capitals + A_loro_loans + A_fixed_assets +
+                                          P_deposits_individuals + P_corporate_funds + P_capitals | law + securities + strategy + nps_cluster_1 + nps_cluster_2 +
+                               porfolio_cluster_1 + porfolio_cluster_2 + porfolio_cluster_3 + porfolio_cluster_4 +
+                               fin_cluster_1 + fin_cluster_2 + fin_cluster_3 + fin_cluster_4,
+                          data = data,
+                          marginal = list(logistic = NULL))
+summary(model_hetorlogit)
+
+lrtest(model_hetorlogit, model_orlogit)        
+#---------------------------------------------------
+# Часть 4. Проверка гипотез
 #---------------------------------------------------
 
 # Проверим гипотезу о том, что porfolio_cluster_1 оказывает такое же влияние на 
@@ -251,7 +278,7 @@ test.1 <- delta_method(model_orlogit, fn = fn_test)
 summary(test.1)
 
 #---------------------------------------------------
-# Часть 4. Предельные эффекты и их значисость
+# Часть 5. Предельные эффекты и их значисость
 #---------------------------------------------------
 
 # Посчитаем средний предельный эффект перемнной
