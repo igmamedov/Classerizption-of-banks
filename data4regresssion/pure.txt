@@ -1,0 +1,11 @@
+Bank + Score + Н1_CAR + Н2_liquidity + Н3_liquidity + ROA + ROE +
+       NPL_Ratio + Debt_TotalAssets + Deposits_TotalAssets +
+       TotalLoans_TotalAssets + LDR + LiquidAssetsRatio + Z_score +
+       LoansLE_TotalAssets + LoansIn_TotalAssets + IssuedMbcs_TotalAssets +
+       AttractedMbcs_TotalAssets + Capital_assets + gos_sobstv + foreign +
+       system + fin_cluster + nps_cluster + law + stratagy + nationhood +
+       securities + news_cluster + A_Shares + A_Promissory_notes +
+       A_bonds + A_capitals + A_corporate_loans + A_indovoduals_loans +
+       A_loro_loans + A_fixed_assets + A_Mbcs + A_rest +
+       P_deposits_individuals + P_corporate_funds + P_accounts_individuals +
+       P_bonds_promissory_notes + P_capitals + P_Mbcs + porfolio_cluster
