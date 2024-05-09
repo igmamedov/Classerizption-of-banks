@@ -12,6 +12,7 @@ from sklearn.manifold import TSNE
 from sklearn import metrics
 from sklearn.metrics import pairwise_distances 
 from scipy.spatial.distance import cdist
+import bcubed
 
 
 class K_means_cluster:
@@ -26,13 +27,16 @@ class K_means_cluster:
     - `perplexity` - для t-SNE
     '''
 
-    def __init__(self, features_table, 
+    def __init__(self, features_table :pd.DataFrame, 
+                 df_bcubed_table : pd.DataFrame,
                  num_clusters: list, 
                  bank_name_column, 
                  scaling = False, 
                  pca_or_tsne = 'pca', 
                  clustering_before_dimreduce = True, 
-                 perplexity = 10):
+                 perplexity = 10,
+                 plot = False
+                 ):
         
         self.features_table = features_table
         self.num_clusters = num_clusters
@@ -42,6 +46,8 @@ class K_means_cluster:
         self.pca_or_tsne = pca_or_tsne
         self.clustering_before_dimreduce = clustering_before_dimreduce
         self.perplexity = perplexity
+        self.df_bcubed_table = df_bcubed_table
+        self.plot = plot
     
     def k_means_clustering(self):
         df_st = self.features_table[self.features_table.columns]
@@ -54,6 +60,8 @@ class K_means_cluster:
             scaler = StandardScaler()
             self.features_table = scaler.fit_transform(self.features_table)
 
+        self.df_notes = pd.DataFrame(columns=['clusterng', 'scaling', 'n_cluster', 'clustering_before_dimreduce', 'pca_or_tsne','perplexity',
+                                              'davies_bouldin', 'calinski_harabasz_score', 'silhouette_score', 'f1_bcubed', 'prc_distributed'])
         for n in self.num_clusters:
             
             if self.pca_or_tsne == 'pca':
@@ -66,36 +74,58 @@ class K_means_cluster:
                 
             # кластеризация ДО понижения размерности
             if self.clustering_before_dimreduce == True:
-                k_means = KMeans(n_clusters = n)
+                k_means = KMeans(n_clusters = n, random_state=123)
                 k_means = k_means.fit(self.features_table)
                 labels = k_means.predict(self.features_table)
+                self.labels = labels
+                
                 silhouette_score = metrics.silhouette_score(self.features_table, labels)
                 ch_score = metrics.calinski_harabasz_score(self.features_table, labels)
                 db_score = metrics.davies_bouldin_score(self.features_table, labels)
                 
-
             # понижение размерности ДО кластеризации
             if self.clustering_before_dimreduce == False:
-                k_means = KMeans(n_clusters = n)
+                k_means = KMeans(n_clusters = n, random_state=123)
                 k_means = k_means.fit(components)
                 labels = k_means.predict(components)
+                self.labels = labels
+                self.k_means_cls = k_means 
+                
                 silhouette_score = metrics.silhouette_score(components, labels, metric='euclidean')
                 ch_score = metrics.calinski_harabasz_score(components, labels)
                 db_score = metrics.davies_bouldin_score(components, labels)
-
-            print('silhouette_score:', silhouette_score)
-            print('calinski_harabasz_score:', ch_score)
-            print('davies_bouldin_score:', db_score)
             
+            if self.plot:
+                fig = px.scatter(components, x=0, y=1, color=labels)
+                fig.update_layout(title=f'Number of clusters = {n}')
+                fig.show()
             
-            fig = px.scatter(components, x=0, y=1, color=labels)
-            fig.update_layout(title=f'Number of clusters = {n}')
-            fig.show()
-            
-
+            #расчет bcubed
             df_st['labels'] = labels
             df_st['bank_name'] = self.bank_name_column # dataframe['bank_name']
-            
+            # self.df_st2 = df_st
+            df1 = df_st[['bank_name', 'labels']].set_index('bank_name')
+            df1['group'] = df1['labels'].apply(lambda x: set([str(x)]))
+            clusters = df1.T.to_dict('records')[1]
+
+            # self.clusters_ = clusters
+            # self.lll = self.split_scores(n, df = self.df_bcubed_table)
+
+            y_true, y_pred = self.form_equal_dict(self.split_scores(n, df = self.df_bcubed_table), clusters)
+            self.y_true = y_true
+            self.y_pred = y_pred
+            try:
+                precision_bcubed = bcubed.precision(y_pred, y_true)
+                recall_bcubed = bcubed.recall(y_pred, y_true)
+                fscore_bcubed = bcubed.fscore(precision_bcubed, recall_bcubed)
+            except:
+                fscore_bcubed = 'cannot_compute'
+
+            prc_list = list(np.round(df_st['labels'].value_counts() / df_st.shape[0], decimals=1))
+
+            self.df_notes.loc[len(self.df_notes)+1] = ['K-means', self.scaling, n, self.clustering_before_dimreduce, self.pca_or_tsne, self.perplexity, 
+                                                       db_score, ch_score, silhouette_score, fscore_bcubed, prc_list]
+
             n_list = []
             for cluster_label in df_st['labels'].value_counts().keys():
                 
@@ -107,7 +137,7 @@ class K_means_cluster:
 
                 n_list.append((cluster_label,bank_list, describe_df))
         
-            self.describe_list.append((n, n_list)) 
+            self.describe_list.append((n, n_list))
 
     def compute_cluster_stats(self, list_index: int, cluster_index: int) -> tuple[list, pd.DataFrame]:
         '''
@@ -133,8 +163,29 @@ class K_means_cluster:
         print('Банков попало в кластер:', len(names_list))
 
         return (names_list, dataframe)
-            
+    
+    def split_scores(self, num_groups, df): #bcubed table
+        df_sorted = df.sort_values(by='index')
+        quantiles = pd.qcut(df_sorted['index'], q=num_groups, labels=False)
+        df_sorted['group'] = quantiles
+        df_sorted = df_sorted.reset_index(drop=True)
+        data = df_sorted[['bank_name', 'group']].set_index('bank_name')
+        data['group'] = data['group'].apply(lambda x: set([str(x)]))
+        clusters = data.T.to_dict('records')[0]
+        return clusters
+    
+    def form_equal_dict(self, dict1, dict2):
+        if len(dict1.keys()) >= len(dict2.keys()):
+            bigger = dict1
+            smaller = dict2
+        else:
+            smaller = dict1
+            bigger = dict2
 
+        bigger = {k: v for (k,v) in bigger.items() if k in smaller.keys()}
+        return bigger, smaller
+            
+            
 def preprocess_data_2019_2021(dataframe, df_stdev_roas, year) -> pd.DataFrame:
     '''
     Преобразует исходные данные для кластеризации, делает новые фичи (ratios)
@@ -266,8 +317,8 @@ def preprocess_data_2019_2021(dataframe, df_stdev_roas, year) -> pd.DataFrame:
 def preprocess_data2023(dataframe, df_stdev_roas):
     year = 2023
     
-    dataframe['Debt/TotalAssets'] = ((dataframe['Кредиты предприятиям и организациям']                  
-                               + dataframe['Кредиты физическим лицам']) / dataframe['Total Assets'])
+    # dataframe['Debt/TotalAssets'] = ((dataframe['Кредиты предприятиям и организациям']                  
+    #                            + dataframe['Кредиты физическим лицам']) / dataframe['Total Assets'])
     
     dataframe['Deposits/TotalAssets'] = (dataframe['Вклады физических лиц'] 
                                      + dataframe['Средства предприятий и организаций']) / dataframe['Total Assets']
@@ -303,7 +354,7 @@ def preprocess_data2023(dataframe, df_stdev_roas):
     'NPL Ratio',
     #'NPL Coverage',
     
-    'Debt/TotalAssets',
+    # 'Debt/TotalAssets',
     'Deposits/TotalAssets',
     'TotalLoans/TotalAssets',
     'LDR',
