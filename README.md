@@ -23,7 +23,7 @@
 
 `banki_comments_parser` - парсер отзывов по банкам на сайте банки.ру
 
-`banki_ru_parcer_finance` - парсер финансовых показателей на сайте банки.ру
+`finance_feature_clustering` - парсер и анализ финансовых показателей на сайте банки.ру
 
 `kommersant_parser` - парсер новостных статей агества kommersant 
 
